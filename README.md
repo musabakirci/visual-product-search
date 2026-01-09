@@ -1,180 +1,46 @@
-🖼️ Embedding-Based Visual Product Search with Explainability
+🖼️ Visual Product Search with Embeddings & Explainability
 
-This project implements an end-to-end visual product search system that retrieves visually similar products directly from images.
-It combines CNN-based embeddings, cosine similarity, optional FAISS ANN acceleration, unsupervised clustering, an analytics dashboard, and Grad-CAM explainability.
-
-🎯 The result is a practical, production-style, and interview-ready system that demonstrates strong ML engineering fundamentals — from offline pipelines to an interactive UI.
+An end-to-end visual product search system that retrieves visually similar products from images using deep learning embeddings and vector similarity.
+Built with a production mindset to demonstrate scalable retrieval, analytics, and explainable AI.
 
 ✨ Key Features
 
-🧠 CNN embeddings (ResNet50, L2-normalized)
+🧠 CNN-based image embeddings (ResNet50)
 
-🔍 Similarity search (cosine similarity, brute-force + optional FAISS ANN)
+🔍 Vector similarity search (cosine, FAISS ANN)
 
 🧩 Unsupervised clustering for product grouping
 
-📊 Analytics dashboard with embedding projections and search metrics
+📊 Analytics dashboard (embedding space & similarity metrics)
 
-🔥 Grad-CAM explainability with disk-based caching
+🔥 Grad-CAM explainability for visual trust
 
-🖥️ Clean Streamlit UI with visual-first results
+🖥️ Interactive Streamlit UI
 
-🏗️ System Architecture
+🏗️ System Design
 
-The system is split into:
+Offline pipelines: embedding generation, clustering, ANN indexing, projection
 
-Offline pipelines
+Online flow: query embedding, similarity retrieval, logging, explainability
 
-Embedding generation
-
-Clustering
-
-FAISS indexing
-
-Embedding projections (t-SNE / UMAP)
-
-Online query flow
-
-Query embedding
-
-Similarity search
-
-Result logging
-
-Explainability generation
-
-📐 A detailed architecture overview and diagram are available in:
-👉 docs/architecture.md
+This separation enables fast queries and scalable indexing.
 
 🧰 Tech Stack
 
-🐍 Python 3.11+
+PyTorch · FAISS · scikit-learn · SQLAlchemy · Streamlit · NumPy · Matplotlib
 
-🔥 PyTorch (ResNet50)
+📊 Analytics & Explainability
 
-⚡ FAISS (IndexFlatIP)
+Embedding space visualization (t-SNE)
 
-📐 scikit-learn (K-Means, t-SNE)
+Similarity score distributions
 
-🗄️ SQLAlchemy + Alembic (SQLite)
-
-🖥️ Streamlit
-
-📦 NumPy, Matplotlib, Pillow
-
-🚀 How to Run
-1️⃣ Create and activate a virtual environment
-python -m venv .venv
-
-
-Windows
-
-.venv\Scripts\activate
-
-
-macOS / Linux
-
-source .venv/bin/activate
-
-2️⃣ Install dependencies
-pip install -r requirements.txt
-
-3️⃣ Create environment file
-copy .env.example .env
-
-
-macOS / Linux
-
-cp .env.example .env
-
-4️⃣ Initialize the database
-alembic upgrade head
-
-5️⃣ Seed sample data
-python scripts/seed_products.py
-
-6️⃣ Build embeddings
-python scripts/build_embeddings.py
-
-7️⃣ Build clusters
-python scripts/build_clusters.py
-
-8️⃣ Build FAISS index
-python scripts/build_faiss_index.py
-
-9️⃣ Build embedding projections
-python scripts/build_projection.py
-
-🔟 Run the application
-streamlit run app.py
-
-🗂️ Project Structure
-project/
-  app.py
-  README.md
-  requirements.txt
-  .env.example
-  alembic.ini
-  alembic/
-    env.py
-    versions/
-  data/
-    images/
-    explanations/
-    faiss/
-    projections/
-    tmp/
-  docs/
-    architecture.md
-    pipeline.md
-    decisions.md
-    demo_walkthrough.md
-    diagrams/
-  scripts/
-    seed_products.py
-    build_embeddings.py
-    build_clusters.py
-    build_faiss_index.py
-    build_projection.py
-    search_demo.py
-    explain_demo.py
-  src/
-    analytics/
-    clustering/
-    db/
-    embedding/
-    explain/
-    search/
-    services/
-    utils/
-    vector_index/
-  tests/
-    test_db_smoke.py
-
-🖼️ Screenshots (Placeholders)
-
-🔍 Visual Search → docs/diagrams/visual_search.png
-
-📊 Analytics Dashboard → docs/diagrams/analytics.png
-
-🔥 Explainability (Grad-CAM) → docs/diagrams/explainability.png
-
-📚 Documentation
-
-🏗️ docs/architecture.md — system components and data flow
-
-🔄 docs/pipeline.md — offline and online pipelines
-
-⚖️ docs/decisions.md — technical trade-offs
-
-🎤 docs/demo_walkthrough.md — live demo script
+Grad-CAM heatmaps highlighting influential image regions
 
 ⚠️ Limitations & Future Work
 
-⏱️ Real-time ingestion and incremental indexing
+Multimodal search (image + text)
 
-🧠 Multimodal search (text + image)
+Incremental indexing for live catalogs
 
-🗃️ Scalable vector databases for large catalogs
-
-🔁 Online learning and feedback loops
+Vector database integration for large-scale deployments
