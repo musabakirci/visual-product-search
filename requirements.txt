@@ -1,0 +1,13 @@
+streamlit
+sqlalchemy
+alembic
+pydantic
+python-dotenv
+pytest
+torch
+torchvision
+pillow
+numpy
+scikit-learn
+faiss-cpu
+matplotlib

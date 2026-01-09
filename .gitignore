@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+
+# Environment files
+.env
+.env.*
+
+# Database
+app.db
+
+# Generated data / artifacts
+data/faiss/
+data/projections/
+data/tmp/
+data/explanations/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
