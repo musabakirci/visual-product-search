@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.analytics.embedding_projection import project_embeddings
+from src.config import resolve_embedding_scope
 from src.db.models import ImageEmbedding
 from src.db.session import get_session
 from src.services.logging_service import configure_logging
@@ -44,10 +45,22 @@ def _decode_embedding(record: ImageEmbedding) -> np.ndarray:
     return vector
 
 
-def load_embeddings(session: Session) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def load_embeddings(
+    session: Session,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load embeddings with product and cluster IDs."""
 
-    records = session.execute(select(ImageEmbedding)).scalars().all()
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
+    stmt = select(ImageEmbedding).where(
+        ImageEmbedding.embedding_version == resolved_version,
+        ImageEmbedding.embedding_type == resolved_type,
+    )
+    records = session.execute(stmt).scalars().all()
     product_ids: list[int] = []
     cluster_ids: list[int] = []
     vectors: list[np.ndarray] = []

@@ -1,9 +1,9 @@
-"""Minimal Streamlit app for database smoke testing."""
+"""Streamlit UI for visual product search."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional, Tuple
 from uuid import uuid4
 
 import matplotlib.pyplot as plt
@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.analytics.metrics import average_similarity, total_searches
-from src.config import get_settings
+from src.config import get_settings, resolve_embedding_scope
 from src.db.models import ImageEmbedding, Product, SimilarityLog
 from src.db.session import get_session
 from src.embedding.extractor import extract_embedding
@@ -29,6 +29,185 @@ from src.utils.paths import get_data_dir, get_project_root
 logger = configure_logging()
 settings = get_settings()
 
+
+def inject_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=Fraunces:opsz,wght@9..144,600&display=swap');
+
+        :root {
+            --bg: #0b0f14;
+            --bg-panel: #0f172a;
+            --bg-elevated: #111827;
+            --border: #1f2937;
+            --text: #f8fafc;
+            --muted: #cbd5e1;
+            --accent: #22d3ee;
+            --accent-strong: #14b8a6;
+            --warning: #f97316;
+            --shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+        }
+
+        html, body, [class*="css"] {
+            font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+            color: var(--text) !important;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Fraunces', 'Georgia', serif;
+            letter-spacing: 0.2px;
+            color: var(--text) !important;
+        }
+
+        p, span, label, li, small, caption, div, section, button {
+            color: var(--text) !important;
+        }
+
+        a, a:visited {
+            color: var(--accent) !important;
+        }
+
+        [data-testid="stAppViewContainer"] {
+            background: var(--bg) !important;
+        }
+
+        [data-testid="stHeader"] {
+            background: transparent !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background: var(--bg-panel) !important;
+            border-right: 1px solid var(--border) !important;
+        }
+
+        div[data-testid="stMetric"] {
+            background: var(--bg-elevated) !important;
+            border: 1px solid var(--border) !important;
+            padding: 12px 16px;
+            border-radius: 14px;
+            box-shadow: var(--shadow);
+        }
+
+        div[data-testid="stMetric"] * {
+            color: var(--text) !important;
+        }
+
+        .panel-card,
+        .result-card {
+            background: var(--bg-elevated) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .result-card {
+            border-radius: 18px;
+            padding: 12px;
+        }
+
+        .result-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-top: 0.4rem;
+            color: var(--text) !important;
+        }
+
+        .result-meta {
+            color: var(--muted) !important;
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
+        .cluster-pill {
+            display: inline-block;
+            margin-top: 0.5rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            background: #0b2f3a !important;
+            color: var(--accent) !important;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid #0e7490 !important;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.18rem 0.55rem;
+            border-radius: 999px;
+            background: #312006 !important;
+            color: #fbbf24 !important;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 0.35rem;
+            border: 1px solid #92400e !important;
+        }
+
+        .stButton > button {
+            background: linear-gradient(135deg, #0d9488, #22d3ee) !important;
+            color: #0b0f14 !important;
+            border-radius: 10px;
+            border: 0 !important;
+            padding: 0.6rem 1rem;
+            font-weight: 700;
+        }
+
+        .stButton > button:hover {
+            background: linear-gradient(135deg, #0f766e, #06b6d4) !important;
+        }
+
+        input, textarea, select, [data-baseweb="input"] input {
+            background: var(--bg-panel) !important;
+            border: 1px solid var(--border) !important;
+            color: var(--text) !important;
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: #94a3b8 !important;
+        }
+
+        [data-testid="stFileUploader"] {
+            background: var(--bg-panel) !important;
+            border: 1px dashed var(--border) !important;
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        [data-testid="stExpander"] {
+            background: var(--bg-panel) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px;
+        }
+
+        [data-testid="stExpander"] summary {
+            color: var(--text) !important;
+        }
+
+        div[data-testid="stTabs"] button {
+            color: var(--muted) !important;
+        }
+
+        div[data-testid="stTabs"] button[aria-selected="true"] {
+            color: var(--text) !important;
+            border-bottom: 2px solid var(--accent) !important;
+        }
+
+        div[data-testid="stProgress"] > div > div {
+            background-color: var(--warning) !important;
+        }
+
+        table, thead, tbody, tr, th, td {
+            background: var(--bg-elevated) !important;
+            color: var(--text) !important;
+            border-color: var(--border) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def serialize_product(product: Product) -> dict:
     return {
         "id": product.id,
@@ -37,13 +216,25 @@ def serialize_product(product: Product) -> dict:
         "image_path": product.image_path,
     }
 
-def load_summary(limit: int = 5) -> tuple[int, int, list[dict]]:
+
+def load_summary(
+    limit: int = 5,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
+) -> tuple[int, int, list[dict]]:
     """Return total product count, embedding count, and a limited list (serialized)."""
 
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
     with get_session() as session:
         total = session.execute(select(func.count(Product.id))).scalar_one()
         embeddings = session.execute(
-            select(func.count(ImageEmbedding.id))
+            select(func.count(ImageEmbedding.id)).where(
+                ImageEmbedding.embedding_version == resolved_version,
+                ImageEmbedding.embedding_type == resolved_type,
+            )
         ).scalar_one()
 
         products = session.execute(
@@ -53,7 +244,6 @@ def load_summary(limit: int = 5) -> tuple[int, int, list[dict]]:
         serialized_products = [serialize_product(p) for p in products]
 
     return total, embeddings, serialized_products
-
 
 
 def resolve_image_path(image_path: str) -> Path:
@@ -84,7 +274,6 @@ def load_products_by_ids(session: Session, product_ids: list[int]) -> dict[int, 
     stmt = select(Product).where(Product.id.in_(product_ids))
     products = session.execute(stmt).scalars().all()
     return {p.id: serialize_product(p) for p in products}
-
 
 
 def load_projection_data() -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -170,287 +359,229 @@ def build_explanations(
     return query_explanation, product_explanations
 
 
-def render_about_tab() -> None:
-    """Render the About / Architecture tab."""
-
-    st.header("About / Architecture")
-    st.markdown(
-        "This demo showcases an end-to-end visual product search pipeline built for fast iteration "
-        "and explainability."
+def render_sidebar() -> None:
+    st.sidebar.markdown(f"### {settings.app_name}")
+    st.sidebar.caption("Production-inspired visual product search demo.")
+    st.sidebar.markdown(
+        """
+        **Pipeline**
+        - Image to embedding (ResNet50)
+        - Cosine similarity search
+        - Optional FAISS ANN
+        - Clustering and Grad-CAM
+        """
     )
-    st.subheader("Pipeline")
-    st.markdown("Image -> Embedding -> Similarity -> Clustering -> ANN -> Explanation")
-    st.subheader("Tech stack")
-    st.markdown(
-        "- PyTorch ResNet50 embeddings\n"
-        "- SQLite + SQLAlchemy\n"
-        "- FAISS (optional ANN)\n"
-        "- K-Means clustering\n"
-        "- Streamlit UI\n"
-        "- Grad-CAM explainability"
-    )
-    st.subheader("Notes")
-    st.markdown(
-        "This project is designed to be extended with better indexing, richer analytics, and "
-        "advanced explainability in future steps."
+    st.sidebar.markdown(
+        """
+        **Tips**
+        - Upload a JPG or PNG
+        - Adjust Top-K for more results
+        - Enable Grad-CAM to inspect matches
+        """
     )
 
 
-def render_analytics_tab(total_products: int, total_embeddings: int) -> None:
-    """Render the Analytics & Embedding Space tab."""
+def render_top_metrics(total_products: int, total_embeddings: int) -> None:
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Products", total_products)
+    metric_cols[1].metric("Embeddings", total_embeddings)
+    metric_cols[2].metric("Database", "OK")
 
-    st.header("Analytics & Embedding Space")
-    st.caption("This dashboard provides insight into model behavior and search quality.")
-    with get_session() as session:
-        search_count = total_searches(session)
-        avg_score = average_similarity(session)
-        similarity_scores = load_similarity_scores(session)
 
-    kpi_cols = st.columns(4)
-    kpi_cols[0].metric("Total products", total_products)
-    kpi_cols[1].metric("Total embeddings", total_embeddings)
-    kpi_cols[2].metric("Total searches", search_count)
-    kpi_cols[3].metric("Avg similarity", f"{avg_score:.4f}")
+def render_result_card(
+    item: dict,
+    product_map: dict[int, dict],
+    explanation_map: dict[int, Path],
+    explain_enabled: bool,
+) -> None:
+    product = product_map.get(item["product_id"])
+    similarity_text, similarity_value = format_similarity(item["similarity_score"])
+    cluster_text = "N/A" if item.get("cluster_id") is None else str(item["cluster_id"])
 
-    projection_data = load_projection_data()
-    if projection_data is None:
-        st.info("Projection data not found. Run `python scripts/build_projection.py`.")
-    else:
-        projections, cluster_ids = projection_data
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.scatter(
-            projections[:, 0],
-            projections[:, 1],
-            c=cluster_ids,
-            cmap="tab10",
-            s=12,
-            alpha=0.8,
+    st.markdown("<div class='result-card'>", unsafe_allow_html=True)
+
+    if product:
+        product_path = resolve_image_path(product["image_path"])
+        if product_path.exists():
+            st.image(str(product_path), use_container_width=True)
+        else:
+            st.info("Image not available.")
+        st.markdown(
+            f"<div class='result-title'>{product['name']}</div>",
+            unsafe_allow_html=True,
         )
-        ax.set_title("Embedding space (2D)")
-        ax.set_xlabel("Dim 1")
-        ax.set_ylabel("Dim 2")
-        st.pyplot(fig, use_container_width=True)
-
-    if similarity_scores:
-        fig, ax = plt.subplots(figsize=(8, 3))
-        ax.hist(similarity_scores, bins=20, color="#4C72B0", alpha=0.85)
-        ax.set_title("Similarity score distribution")
-        ax.set_xlabel("Cosine similarity")
-        ax.set_ylabel("Count")
-        st.pyplot(fig, use_container_width=True)
     else:
-        st.info("No similarity logs yet. Run a few searches to populate metrics.")
+        st.info("Product not found.")
+        st.markdown(
+            f"<div class='result-title'>Product {item['product_id']}</div>",
+            unsafe_allow_html=True,
+        )
+
+    if item.get("rank") == 1:
+        st.markdown("<div class='badge'>Top match</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        f"<div class='result-meta'>Similarity {similarity_text}</div>",
+        unsafe_allow_html=True,
+    )
+    st.progress(similarity_value)
+    st.markdown(
+        f"<div class='cluster-pill'>Cluster {cluster_text}</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if explain_enabled:
+        with st.expander("Why this match?"):
+            explanation = explanation_map.get(item["product_id"])
+            if explanation:
+                st.image(str(explanation), use_container_width=True)
+                st.caption(
+                    "Grad-CAM highlights regions that most influenced the similarity score."
+                )
+            else:
+                st.info("Grad-CAM not available for this item.")
 
 
-def render_visual_search_tab(
+def render_search_tab(
     total_products: int,
     total_embeddings: int,
-    top_products: list[Product],
+    top_products: list[dict],
 ) -> None:
-    """Render the Visual Search tab."""
-
-    st.header("Visual Search")
-    st.caption("Upload an image to find visually similar products.")
-    status_cols = st.columns(3)
-    status_cols[0].success("DB connection OK")
-    status_cols[1].metric("Products", total_products)
-    status_cols[2].metric("Embeddings", total_embeddings)
-
     if "search_results" not in st.session_state:
         st.session_state.search_results = []
     if "query_path" not in st.session_state:
         st.session_state.query_path = None
 
-    query_container = st.container()
-    with query_container:
-        left, center, right = st.columns([1, 2, 1])
-        with center:
-            uploaded_file = st.file_uploader(
-                "Upload a query image",
-                type=["jpg", "jpeg", "png"],
-                key="query_uploader",
-            )
-            if uploaded_file is not None:
-                st.image(uploaded_file, caption="Query image", use_column_width=True)
+    left, right = st.columns([1, 2], gap="large")
 
-            search_clicked = st.button("Search", type="primary", use_container_width=True)
+    with left:
+        st.markdown("### Query panel")
+        st.caption("Upload an image to find visually similar products.")
 
-    with st.expander("Search options", expanded=False):
-        use_faiss = st.checkbox("Use FAISS (fast ANN)", value=False, key="use_faiss")
-        same_cluster_first = st.checkbox(
-            "Prioritize same product group",
-            value=True,
-            key="same_cluster_first",
+        st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
+        uploaded_file = st.file_uploader(
+            "Upload a query image",
+            type=["jpg", "jpeg", "png"],
+            key="query_uploader",
         )
-        top_k = st.slider("Top-K results", min_value=1, max_value=10, value=5, key="top_k")
-        st.caption("ANN mode may trade exactness for speed.")
-        if use_faiss and same_cluster_first:
-            st.caption("Cluster-prioritized search currently uses brute-force fallback.")
-
-    with st.expander("Advanced input options", expanded=False):
-        use_local_path = st.checkbox("Use a local file path", value=False, key="use_local_path")
+        use_local_path = st.checkbox("Use a local file path", value=False)
         local_path = st.text_input("Local image path", key="local_path_input")
+
+        top_k = st.slider(
+            "Top-K results",
+            min_value=1,
+            max_value=10,
+            value=5,
+            key="top_k",
+        )
+        explain_enabled = st.checkbox("Enable Grad-CAM explanations", value=False)
+
+        with st.expander("Search options", expanded=False):
+            use_faiss = st.checkbox("Use FAISS (fast ANN)", value=False, key="use_faiss")
+            same_cluster_first = st.checkbox(
+                "Prioritize same product group",
+                value=True,
+                key="same_cluster_first",
+            )
+            st.caption("ANN mode may trade exactness for speed.")
+            if use_faiss and same_cluster_first:
+                st.caption(
+                    "Cluster-prioritized search uses brute-force fallback when FAISS is enabled."
+                )
+
+        search_clicked = st.button("Search", type="primary", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
         if use_local_path and local_path:
             candidate = resolve_image_path(local_path)
             if candidate.exists():
-                st.image(str(candidate), caption="Local query image")
+                st.markdown("#### Preview")
+                st.image(str(candidate), caption="Local query image", use_container_width=True)
             else:
-                st.info("Image path not found.")
-
-    st.caption("Change options and press Search to refresh results.")
-
-    if search_clicked:
-        query_path: Optional[Path] = None
-        if use_local_path and local_path:
-            candidate = resolve_image_path(local_path)
-            if candidate.exists():
-                query_path = candidate
-            else:
-                st.warning("Local image path not found.")
+                st.info("Local image path not found.")
         elif uploaded_file is not None:
-            query_path = save_uploaded_file(uploaded_file)
-        else:
-            st.warning("No image uploaded yet.")
+            st.markdown("#### Preview")
+            st.image(uploaded_file, caption="Query image", use_container_width=True)
 
-        if query_path is not None and query_path.exists():
-            with st.spinner("Searching for similar products..."):
-                try:
-                    query_embedding = extract_embedding(str(query_path))
-                    with get_session() as session:
-                        results = search_similar_products(
-                            session=session,
-                            query_embedding=query_embedding,
-                            top_k=int(top_k),
-                            same_cluster_first=same_cluster_first,
-                            use_faiss=use_faiss,
-                        )
-                        log_similarity_results(session, str(query_path), results)
-                    st.session_state.search_results = results
-                    st.session_state.query_path = str(query_path)
-                except Exception as exc:
-                    logger.exception("Similarity search failed: %s", exc)
-                    st.error("Similarity search failed")
-                    st.exception(exc)
+        if search_clicked:
+            query_path: Optional[Path] = None
+            if use_local_path and local_path:
+                candidate = resolve_image_path(local_path)
+                if candidate.exists():
+                    query_path = candidate
+                else:
+                    st.warning("Local image path not found.")
+            elif uploaded_file is not None:
+                query_path = save_uploaded_file(uploaded_file)
+            else:
+                st.warning("No image uploaded yet.")
 
-    results: list[dict] = st.session_state.search_results or []
-    query_path_str = st.session_state.query_path
-    query_path = Path(query_path_str) if query_path_str else None
+            if query_path is not None and query_path.exists():
+                with st.spinner("Searching for similar products..."):
+                    try:
+                        query_embedding = extract_embedding(str(query_path))
+                        with get_session() as session:
+                            results = search_similar_products(
+                                session=session,
+                                query_embedding=query_embedding,
+                                top_k=int(top_k),
+                                same_cluster_first=same_cluster_first,
+                                use_faiss=use_faiss,
+                            )
+                            log_similarity_results(session, str(query_path), results)
+                        st.session_state.search_results = results
+                        st.session_state.query_path = str(query_path)
+                    except Exception as exc:
+                        logger.exception("Similarity search failed: %s", exc)
+                        st.error("Similarity search failed")
+                        st.exception(exc)
 
-    if not query_path:
-        st.info("No image uploaded yet.")
-    elif not results:
-        st.info("No embeddings found - run `python scripts/build_embeddings.py`.")
-    else:
+    with right:
+        st.markdown("### Results")
+        results: list[dict] = st.session_state.search_results or []
+        query_path_str = st.session_state.query_path
+        query_path = Path(query_path_str) if query_path_str else None
+
+        if not query_path:
+            st.info("Upload an image and run a search to see results.")
+            return
+        if not results:
+            st.info("No embeddings found - run `python scripts/build_embeddings.py`.")
+            return
+
         with get_session() as session:
             product_map = load_products_by_ids(
                 session,
                 [item["product_id"] for item in results],
             )
 
-        explain_enabled = st.checkbox("Explain top matches (Grad-CAM)", value=False)
-        if explain_enabled:
-            st.caption("Explanations are indicative and may not be perfect.")
-
-        query_explanation: Optional[Path] = None
         explanation_map: dict[int, Path] = {}
-        if explain_enabled and query_path is not None:
-            with st.spinner("Generating explanations..."):
-                query_explanation, explanation_map = build_explanations(
+        if explain_enabled:
+            with st.spinner("Generating Grad-CAM explanations..."):
+                _, explanation_map = build_explanations(
                     query_path=query_path,
                     results=results,
                     product_map=product_map,
-                    limit=3,
+                    limit=len(results),
                 )
 
-        st.subheader("Results")
-        hero = results[0]
-        hero_product = product_map.get(hero["product_id"])
-        hero_cluster = hero.get("cluster_id")
-        hero_score_text, hero_progress = format_similarity(hero["similarity_score"])
-
-        hero_cols = st.columns([1.2, 1.8])
-        with hero_cols[0]:
-            if hero_product:
-                hero_image_path = resolve_image_path(hero_product["image_path"])
-
-                if hero_image_path.exists():
-                    st.image(str(hero_image_path), caption="Top match", use_column_width=True)
-                else:
-                    st.info("Image not available.")
-            else:
-                st.info("Product not found.")
-
-            if query_path and query_path.exists():
-                st.image(str(query_path), caption="Query image", use_column_width=True)
-                if explain_enabled:
-                    with st.expander("Why this query?"):
-                        if query_explanation:
-                            st.image(str(query_explanation), caption="Query Grad-CAM")
-                            st.caption(
-                                "Highlighted regions indicate areas most influential for similarity."
-                            )
-                        else:
-                            st.info("Unable to generate query explanation.")
-
-        with hero_cols[1]:
-            if hero_product:
-                st.markdown(f"### {hero_product['name']}")
-                st.caption(hero_product["category"] or "Uncategorized")
-                st.progress(hero_progress)
-                cluster_text = "N/A" if hero_cluster is None else str(hero_cluster)
-                st.caption(f"Similarity: {hero_score_text} | Cluster: {cluster_text}")
-            else:
-                st.markdown("### Top match")
-                st.caption(f"Similarity: {hero_score_text}")
-
-            if explain_enabled:
-                with st.expander("Why this match?"):
-                    explanation = explanation_map.get(hero["product_id"])
-                    if explanation:
-                        st.image(str(explanation), caption="Top match Grad-CAM")
-                        st.caption(
-                            "Highlighted regions indicate areas most influential for similarity."
-                        )
-                    else:
-                        st.info("Explanation not available for this item.")
-
-        remaining = results[1:]
-        if remaining:
-            st.subheader("More matches")
-            columns_count = 3 if len(remaining) > 4 else 2
-            cols = st.columns(columns_count)
-            for idx, item in enumerate(remaining):
-                product = product_map.get(item["product_id"])
-                if not product:
-                    continue
-                score_text, _ = format_similarity(item["similarity_score"])
-                cluster_text = "N/A" if item.get("cluster_id") is None else str(item["cluster_id"])
-                col = cols[idx % columns_count]
-                with col:
-                    product_path = resolve_image_path(product["image_path"])
-                    if product_path.exists():
-                        st.image(str(product_path), use_column_width=True)
-                    st.markdown(f"**{product['name']}**")
-                    st.caption(f"{score_text} similarity | Cluster {cluster_text}")
-                    if explain_enabled:
-                        with st.expander("Why this match?"):
-                            explanation = explanation_map.get(item["product_id"])
-                            if explanation:
-                                st.image(str(explanation), caption="Grad-CAM")
-                                st.caption(
-                                    "Highlighted regions indicate areas most influential for similarity."
-                                )
-                            else:
-                                st.info("Explanation available for top 3 matches.")
+        st.caption(f"{len(results)} results")
+        columns_count = 3 if len(results) > 4 else 2
+        grid_cols = st.columns(columns_count, gap="large")
+        for idx, item in enumerate(results):
+            with grid_cols[idx % columns_count]:
+                render_result_card(item, product_map, explanation_map, explain_enabled)
 
         with st.expander("Catalog preview", expanded=False):
             if top_products:
                 st.table(
                     [
                         {
-                             "name": product["name"],
-                             "category": product["category"],
-                             "image_path": product["image_path"],
+                            "name": product["name"],
+                            "category": product["category"],
+                            "image_path": product["image_path"],
                         }
                         for product in top_products
                     ]
@@ -459,15 +590,93 @@ def render_visual_search_tab(
                 st.info("No products found. Run the seed script.")
 
 
-st.set_page_config(page_title=settings.app_name)
+def render_analytics_tab(total_products: int, total_embeddings: int) -> None:
+    st.header("Analytics")
+    st.caption("Embedding space and search quality snapshots.")
+
+    with get_session() as session:
+        search_count = total_searches(session)
+        avg_score = average_similarity(session)
+        similarity_scores = load_similarity_scores(session)
+
+    kpi_cols = st.columns(3)
+    kpi_cols[0].metric("Total searches", search_count)
+    kpi_cols[1].metric("Avg similarity", f"{avg_score:.4f}")
+    kpi_cols[2].metric("Embeddings", total_embeddings)
+
+    projection_data = load_projection_data()
+    if projection_data is None:
+        st.info("Projection data not found. Run `python scripts/build_projection.py`.")
+    else:
+        projections, cluster_ids = projection_data
+        fig, ax = plt.subplots(figsize=(7.5, 5))
+        ax.scatter(
+            projections[:, 0],
+            projections[:, 1],
+            c=cluster_ids,
+            cmap="tab10",
+            s=12,
+            alpha=0.85,
+        )
+        ax.set_title("Embedding space (t-SNE)")
+        ax.set_xlabel("Dim 1")
+        ax.set_ylabel("Dim 2")
+        center_col = st.columns([1, 3, 1])[1]
+        center_col.pyplot(fig, use_container_width=True)
+
+    with st.expander("Similarity distribution", expanded=False):
+        if similarity_scores:
+            fig, ax = plt.subplots(figsize=(8, 3))
+            ax.hist(similarity_scores, bins=20, color="#4C72B0", alpha=0.85)
+            ax.set_title("Similarity score distribution")
+            ax.set_xlabel("Cosine similarity")
+            ax.set_ylabel("Count")
+            st.pyplot(fig, use_container_width=True)
+        else:
+            st.info("No similarity logs yet. Run a few searches to populate metrics.")
+
+
+def render_about_tab() -> None:
+    st.header("About / Architecture")
+    st.markdown(
+        "This demo mirrors a production-inspired ML search system with offline indexing and online retrieval."
+    )
+    st.subheader("System architecture")
+    st.markdown(
+        "- Offline: batch embedding generation, clustering, FAISS indexing, and projection artifacts.\n"
+        "- Online: query embedding, cosine similarity search, and logging.\n"
+        "- Explainability: Grad-CAM overlays cached to disk."
+    )
+    st.subheader("Technologies")
+    st.markdown(
+        "- ResNet50 embeddings\n"
+        "- SQLite + SQLAlchemy\n"
+        "- FAISS (optional ANN)\n"
+        "- K-Means clustering\n"
+        "- Streamlit UI\n"
+        "- Grad-CAM explainability"
+    )
+    st.subheader("Design intent")
+    st.markdown(
+        "The goal is to showcase a clean, production-inspired pipeline that is easy to extend and demo."
+    )
+
+
+st.set_page_config(page_title=settings.app_name, layout="wide")
+inject_styles()
+render_sidebar()
+
 st.title(settings.app_name)
 st.caption("Visual similarity search demo.")
 
 try:
     total_products, total_embeddings, top_products = load_summary()
+    render_top_metrics(total_products, total_embeddings)
+    st.divider()
+
     tabs = st.tabs(["Visual Search", "Analytics", "About / Architecture"])
     with tabs[0]:
-        render_visual_search_tab(total_products, total_embeddings, top_products)
+        render_search_tab(total_products, total_embeddings, top_products)
     with tabs[1]:
         render_analytics_tab(total_products, total_embeddings)
     with tabs[2]:

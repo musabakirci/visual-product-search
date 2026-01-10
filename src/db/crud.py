@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.config import resolve_embedding_scope
 from src.db.models import ImageEmbedding, Product, SimilarityLog
 
 
@@ -48,12 +49,26 @@ def create_embedding(
     embedding_dim: int,
     embedding: bytes,
     cluster_id: Optional[int] = None,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
 ) -> ImageEmbedding:
     """Create an embedding entry (placeholder)."""
 
-    existing = get_embedding_by_product(session, product_id)
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
+    existing = get_embedding_by_product(
+        session,
+        product_id,
+        embedding_version=resolved_version,
+        embedding_type=resolved_type,
+    )
     if existing is not None:
-        raise ValueError(f"Embedding already exists for product_id={product_id}")
+        raise ValueError(
+            "Embedding already exists for product_id=%s version=%s type=%s"
+            % (product_id, resolved_version, resolved_type)
+        )
 
     record = ImageEmbedding(
         product_id=product_id,
@@ -61,6 +76,8 @@ def create_embedding(
         embedding_dim=embedding_dim,
         embedding=embedding,
         cluster_id=cluster_id,
+        embedding_version=resolved_version,
+        embedding_type=resolved_type,
     )
     session.add(record)
     session.flush()
@@ -71,10 +88,20 @@ def create_embedding(
 def get_embedding_by_product(
     session: Session,
     product_id: int,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
 ) -> Optional[ImageEmbedding]:
     """Get an embedding by product ID."""
 
-    stmt = select(ImageEmbedding).where(ImageEmbedding.product_id == product_id)
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
+    stmt = select(ImageEmbedding).where(
+        ImageEmbedding.product_id == product_id,
+        ImageEmbedding.embedding_version == resolved_version,
+        ImageEmbedding.embedding_type == resolved_type,
+    )
     return session.execute(stmt).scalars().first()
 
 

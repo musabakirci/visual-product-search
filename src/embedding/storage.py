@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 import numpy as np
 from sqlalchemy.orm import Session
 
+from src.config import resolve_embedding_scope
 from src.db.crud import get_embedding_by_product
 from src.db.models import ImageEmbedding
 
@@ -18,10 +20,21 @@ def save_embedding(
     product_id: int,
     embedding: np.ndarray,
     model_name: str,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
 ) -> bool:
     """Save an embedding if one does not already exist."""
 
-    existing = get_embedding_by_product(session, product_id)
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
+    existing = get_embedding_by_product(
+        session,
+        product_id,
+        embedding_version=resolved_version,
+        embedding_type=resolved_type,
+    )
     if existing is not None:
         logger.info("Embedding already exists for product_id=%s", product_id)
         return False
@@ -32,6 +45,8 @@ def save_embedding(
         model_name=model_name,
         embedding_dim=int(vector.size),
         embedding=vector.tobytes(),
+        embedding_version=resolved_version,
+        embedding_type=resolved_type,
     )
     session.add(record)
     session.commit()

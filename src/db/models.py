@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, LargeBinary, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -37,17 +37,26 @@ class ImageEmbedding(Base):
     """Embedding record for a product."""
 
     __tablename__ = "image_embeddings"
+    __table_args__ = (
+        UniqueConstraint(
+            "product_id",
+            "embedding_version",
+            "embedding_type",
+            name="uq_image_embeddings_product_id_version_type",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id"),
-        unique=True,
         nullable=False,
     )
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     embedding_dim: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     cluster_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    embedding_version: Mapped[str] = mapped_column(String(255), nullable=False, default="v1")
+    embedding_type: Mapped[str] = mapped_column(String(255), nullable=False, default="resnet50")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     product: Mapped[Product] = relationship(back_populates="embedding")

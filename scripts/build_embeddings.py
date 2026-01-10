@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.config import resolve_embedding_scope
 from src.db.crud import list_products
 from src.db.session import get_session
 from src.embedding.extractor import extract_embedding
@@ -15,7 +16,6 @@ logger = configure_logging()
 
 def resolve_image_path(image_path: str) -> Path:
     """Resolve image path to an absolute path."""
-
     path = Path(image_path)
     if path.is_absolute():
         return path
@@ -29,16 +29,21 @@ def build_embeddings() -> None:
     skipped_missing = 0
     skipped_existing = 0
 
+    # ✅ single source of truth for embedding scope
+    embedding_version, embedding_type = resolve_embedding_scope()
+
     with get_session() as session:
         products = list_products(session)
         total = len(products)
+
         for product in products:
-            image_path = resolve_image_path(product.image_path)
+            image_path = resolve_image_path(product["image_path"])
+
             if not image_path.exists():
                 skipped_missing += 1
                 logger.warning(
                     "Missing image for product_id=%s path=%s",
-                    product.id,
+                    product["id"],
                     image_path,
                 )
                 continue
@@ -49,7 +54,7 @@ def build_embeddings() -> None:
                 skipped_missing += 1
                 logger.warning(
                     "Failed to process image for product_id=%s path=%s error=%s",
-                    product.id,
+                    product["id"],
                     image_path,
                     exc,
                 )
@@ -57,10 +62,13 @@ def build_embeddings() -> None:
 
             created_now = save_embedding(
                 session=session,
-                product_id=product.id,
+                product_id=product["id"],
                 embedding=embedding,
                 model_name="resnet50",
+                embedding_version=embedding_version,
+                embedding_type=embedding_type,
             )
+
             if created_now:
                 created += 1
             else:
@@ -70,6 +78,11 @@ def build_embeddings() -> None:
     logger.info("Embeddings created: %s", created)
     logger.info("Skipped missing/unreadable: %s", skipped_missing)
     logger.info("Skipped existing: %s", skipped_existing)
+    logger.info(
+        "Embedding scope used: version=%s type=%s",
+        embedding_version,
+        embedding_type,
+    )
 
 
 if __name__ == "__main__":

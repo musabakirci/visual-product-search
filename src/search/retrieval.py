@@ -10,6 +10,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.config import resolve_embedding_scope
 from src.db.crud import log_similarity_event
 from src.db.models import ImageEmbedding
 from src.search.similarity import cosine_similarity
@@ -37,10 +38,22 @@ def _decode_embedding(record: ImageEmbedding) -> np.ndarray:
     return vector
 
 
-def _iter_embeddings(session: Session) -> Iterable[ImageEmbedding]:
+def _iter_embeddings(
+    session: Session,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
+) -> Iterable[ImageEmbedding]:
     """Yield embedding records from the database."""
 
-    return session.execute(select(ImageEmbedding)).scalars().all()
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
+    stmt = select(ImageEmbedding).where(
+        ImageEmbedding.embedding_version == resolved_version,
+        ImageEmbedding.embedding_type == resolved_type,
+    )
+    return session.execute(stmt).scalars().all()
 
 
 @lru_cache(maxsize=1)
@@ -55,14 +68,25 @@ def _load_faiss_assets() -> Tuple[object, np.ndarray]:
     return index, product_ids
 
 
-def _attach_cluster_ids(session: Session, results: list[dict]) -> list[dict]:
+def _attach_cluster_ids(
+    session: Session,
+    results: list[dict],
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
+) -> list[dict]:
     """Attach cluster IDs to result items when available."""
 
     if not results:
         return results
     product_ids = [item["product_id"] for item in results]
+    resolved_version, resolved_type = resolve_embedding_scope(
+        embedding_version,
+        embedding_type,
+    )
     stmt = select(ImageEmbedding.product_id, ImageEmbedding.cluster_id).where(
-        ImageEmbedding.product_id.in_(product_ids)
+        ImageEmbedding.product_id.in_(product_ids),
+        ImageEmbedding.embedding_version == resolved_version,
+        ImageEmbedding.embedding_type == resolved_type,
     )
     cluster_map = {
         product_id: cluster_id for product_id, cluster_id in session.execute(stmt).all()
@@ -71,11 +95,20 @@ def _attach_cluster_ids(session: Session, results: list[dict]) -> list[dict]:
         item["cluster_id"] = cluster_map.get(item["product_id"])
     return results
 
-def _prepare_entries(session: Session, query_size: int) -> list[dict]:
+def _prepare_entries(
+    session: Session,
+    query_size: int,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
+) -> list[dict]:
     """Prepare embedding entries with decoded vectors."""
 
     entries: list[dict] = []
-    for record in _iter_embeddings(session):
+    for record in _iter_embeddings(
+        session,
+        embedding_version=embedding_version,
+        embedding_type=embedding_type,
+    ):
         vector = _decode_embedding(record)
         if vector.size == 0:
             continue
@@ -148,6 +181,8 @@ def search_similar_products(
     top_k: int = 5,
     same_cluster_first: bool = True,
     use_faiss: bool = False,
+    embedding_version: Optional[str] = None,
+    embedding_type: Optional[str] = None,
 ) -> list[dict]:
     """Search for top-k similar products by cosine similarity."""
 
@@ -159,7 +194,12 @@ def search_similar_products(
         try:
             index, product_ids = _load_faiss_assets()
             results = faiss_search(query, top_k, index, product_ids)
-            return _attach_cluster_ids(session, results)
+            return _attach_cluster_ids(
+                session,
+                results,
+                embedding_version=embedding_version,
+                embedding_type=embedding_type,
+            )
         except Exception as exc:
             logger.warning("FAISS search unavailable, falling back to brute-force: %s", exc)
 
@@ -168,7 +208,12 @@ def search_similar_products(
             "Cluster-prioritized search uses brute-force fallback when FAISS is enabled."
         )
 
-    entries = _prepare_entries(session, query.size)
+    entries = _prepare_entries(
+        session,
+        query.size,
+        embedding_version=embedding_version,
+        embedding_type=embedding_type,
+    )
     if not entries:
         return []
 
